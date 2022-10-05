@@ -1,6 +1,6 @@
 # Time Request gRPC Example Guide
 
-- [gRPC guide](#Time-Request-gRPC-Guide)
+- [gRPC guide](#Time-Request-gRPC-Example-Guide)
     - [Setting Up Files](#setting-up-files)
     - [Populating Proto File](#populating-proto-file)
     - [Setting Up Server](#setting-up-server)
@@ -73,7 +73,7 @@ NOTE: imports are not always explicitly mentioned here (such as `time`, etc.). T
 
 Now we need to set up the server. We will let the user determine which port it should run on via the flag "-port". 
 
-1. Create a server struct with the necessary fields. You can read more about why the unimplemented part is needed [here](https://stackoverflow.com/questions/69700899/grpc-error-about-missing-an-unimplemented-server-function).
+Create a server struct with the necessary fields. You can read more about why the unimplemented part is needed [here](https://stackoverflow.com/questions/69700899/grpc-error-about-missing-an-unimplemented-server-function).
 
 ```go
 type Server struct {
@@ -83,7 +83,7 @@ type Server struct {
 }
 ```
 
-2. Add a port variable and create a main that parses the flag, sets up a server struct, starts the server, and ensures that main will keep running.
+Add a port variable and create a main that parses the flag, sets up a server struct, starts the server, and ensures that main will keep running.
 
 ```go
 var port = flag.Int("port", 0, "server port number")
