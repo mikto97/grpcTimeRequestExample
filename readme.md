@@ -11,7 +11,7 @@
     - [How to Run](#how-to-run)
     - [Important Notes](#important-notes)
 
-This guide provides an overview of how to implement a simple scenario with grpc (see [here](https://github.com/PatrickMatthiesen/DSYS-gRPC-template) for a more complex one). We want to construct a scenario with two entities:
+This guide provides an overview of how to implement a simple scenario with grpc (see [here](https://github.com/PatrickMatthiesen/DSYS-gRPC-template) for a more in-depth one). It assumes that you have the necessary proto installed (otherwise see in-depth guide). We want to construct a scenario with two entities:
 * A server
 * A client
 
