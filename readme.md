@@ -1,4 +1,4 @@
-# Time Request gRPC Guide
+# Time Request gRPC Example Guide
 
 - [gRPC guide](#Time-Request-gRPC-Guide)
     - [Setting Up Files](#setting-up-files)
