@@ -1,9 +1,9 @@
 # Time Request gRPC Example Guide
 
 - [gRPC guide](#Time-Request-gRPC-Example-Guide)
-    - [Setting Up Files](#setting-up-the-files)
+    - [Setting Up the Files](#setting-up-the-files)
     - [Populating Proto File](#populating-proto-file)
-    - [Setting Up Server](#setting-up-the-server)
+    - [Setting Up the Server](#setting-up-the-server)
       - [Making the Server Run](#making-the-server-run)
       - [Implementing the Server Function](#implementing-the-server-function)
       - [Summary of the Process](#summary-of-the-process)
