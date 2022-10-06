@@ -108,7 +108,31 @@ func main() {
 }
 ```
 
-NOTE: You will need to add `"google.golang.org/grpc"`to the imports section and then run `go mod tidy` for the above code to work (specifically to be able to use the NewServer function).
+To implement the ``startServer`` function, we have to use the `"google.golang.org/grpc"` (`grpc`) and `net`package. We first create a new grpc server and make it listen at the port the user specified. If that is successful, then we register a proto server with the grpc server and the server struct and serve its listener.
+
+```go
+func startServer(server *Server) {
+
+	// Create a new grpc server
+	grpcServer := grpc.NewServer()
+
+	// Make the server listen at the given port (convert int port to string)
+	listener, err := net.Listen("tcp", ":"+strconv.Itoa(server.port))
+
+	if err != nil {
+		log.Fatalf("Could not create the server %v", err)
+	}
+	log.Printf("Started server at port: %d\n", server.port)
+
+	// Register the grpc server and serve its listener
+	proto.RegisterTimeAskServer(grpcServer, server)
+	serveError := grpcServer.Serve(listener)
+	if serveError != nil {
+		log.Fatalf("Could not serve listener")
+	}
+}
+```
+NOTE: After adding `"google.golang.org/grpc"`, you will need to run `go mod tidy` (specifically to be able to use the NewServer function).
 
 Now you should be able to start the server at some port like ``go run server/server.go -port 5454`` and get the output `some_time_stamp Started server at port: 5454` (while the server keeps running).
 
