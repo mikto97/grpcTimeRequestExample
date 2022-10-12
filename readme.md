@@ -143,14 +143,14 @@ We now need to implement the `AskForTime` function we defined in the proto file,
 To do so, we have to find the corresponding function inside the `proto_grpc.pb.go` file and copy its signature (in my case on line 32):
 
 ```go
-func (c *timeAskClient) AskForTime(ctx context.Context, in *AskForTimeMessage, opts ...grpc.CallOption) (*SendTime, error)
+func (c *timeAskClient) AskForTime(ctx context.Context, in *AskForTimeMessage, opts ...grpc.CallOption) (*TimeMessage, error)
 ```
 
 Copy this into the ``server.go`` file, turn it into a function, and change some things:
 * Import the context package. 
 * Change timeAskClient to Server, so that it matches our server struct definition.
 * Add *proto.AskForTimeMessage instead of just AskForTimeMessage as the `in` value (to point to the right type in the proto file).
-* Add *proto.SendTime instead of just SendTime as the output.
+* Add *proto.TimeMessage instead of just TimeMessage as the output.
 * Remove the `opts ...grpc.CallOption` from the input.
 * Temporarily make it return ``nil, nil``
 
