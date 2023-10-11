@@ -8,8 +8,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"log"
 	"os"
-	proto "simpleGuide/grpc"
 	"strconv"
+	proto "grpc/grpc"
 )
 
 type Client struct {

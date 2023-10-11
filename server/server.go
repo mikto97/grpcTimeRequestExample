@@ -3,12 +3,13 @@ package main
 import (
 	"context"
 	"flag"
-	"google.golang.org/grpc"
 	"log"
 	"net"
-	proto "simpleGuide/grpc"
 	"strconv"
+	proto "grpc/grpc"
 	"time"
+
+	"google.golang.org/grpc"
 )
 
 // Struct that will be used to represent the Server.
