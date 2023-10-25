@@ -43,42 +43,8 @@ func main() {
 		log.Fatalf("Could not join the chat board: %v", err)
 	}
 
-	// Wait for the client (user) to ask for the time
-	go waitForTimeRequest(client)
-
-	for {
-
-	}
 }
 
-func waitForTimeRequest(client *Client) {
-	// Connect to the server
-	serverConnection, _ := connectToServer()
-
-	// Wait for input in the client terminal
-	scanner := bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
-		input := scanner.Text()
-
-		if len(input) > 128 {
-			first128Chars := input[:128]
-			log.Printf("Client asked for time with input: %s\n", first128Chars)
-		} else {
-			log.Printf("Client asked for time with input: %s\n", input)
-		}
-
-		// Ask the server for the time
-		timeReturnMessage, err := serverConnection.AskForTime(context.Background(), &proto.AskForTimeMessage{
-			ClientId: int64(client.id),
-		})
-
-		if err != nil {
-			log.Printf(err.Error())
-		} else {
-			log.Printf("Server %s says the time is %s\n", timeReturnMessage.ServerName, timeReturnMessage.Time)
-		}
-	}
-}
 func getChatBoardClient() (proto.ChatBoardClient, error) {
 	// Dial the server at the specified port.
 	conn, err := grpc.Dial("localhost:"+strconv.Itoa(*serverPort), grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -99,6 +65,7 @@ func joinServer(id int64) (proto.ChatBoard_JoinClient, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	// Send the first message with the client ID
 	stream.Send(&proto.JoinRequest{
 		Id: int32(id),
@@ -134,7 +101,7 @@ func joinServer(id int64) (proto.ChatBoard_JoinClient, error) {
 	return stream, nil
 }
 
-func connectToServer() (proto.TimeAskClient, error) {
+/*func connectToServer() (proto.TimeAskClient, error) {
 	// Dial the server at the specified port.
 	conn, err := grpc.Dial("localhost:"+strconv.Itoa(*serverPort), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -144,3 +111,4 @@ func connectToServer() (proto.TimeAskClient, error) {
 	}
 	return proto.NewTimeAskClient(conn), nil
 }
+*/

@@ -28,4 +28,5 @@ message JoinRequest {
 
 message JoinResponse {
   string message = 1; // the message from the server
+
 }

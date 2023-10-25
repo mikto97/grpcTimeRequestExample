@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	proto "grpc/grpc"
@@ -10,7 +9,6 @@ import (
 	"net"
 	"strconv"
 	"sync"
-	"time"
 
 	"google.golang.org/grpc"
 )
@@ -18,8 +16,9 @@ import (
 // Struct that will be used to represent the Server.
 type Server struct {
 	proto.UnimplementedTimeAskServer // Necessary
-	name                             string
-	port                             int
+	proto.UnimplementedChatBoardServer
+	name string
+	port int
 }
 
 // Used to get the user-defined port for the server from the command line
@@ -49,32 +48,28 @@ func startServer(server *Server) {
 	// Create a new grpc server
 	grpcServer := grpc.NewServer()
 
-	// Make the server listen at the given port (convert int port to string)
+	// Create a service implementation
+	chatBoardServer := &ChatBoardServer{
+		clients: make(map[int32]proto.ChatBoard_JoinServer),
+	}
+
+	//Make the server listen at the given port (convert int port to string)
 	listener, err := net.Listen("tcp", ":"+strconv.Itoa(server.port))
 
 	if err != nil {
 		log.Fatalf("Could not create the server %v", err)
 	}
-	log.Printf("Started server at port: %d\n", server.port)
+	log.Printf("test - Started server at port: %d\n", server.port)
 
 	// Register the grpc server and serve its listener
-	proto.RegisterTimeAskServer(grpcServer, server)
+	//proto.RegisterTimeAskServer(grpcServer, chatBoardServer) needed to remove this for it to work
+	proto.RegisterChatBoardServer(grpcServer, chatBoardServer)
 	serveError := grpcServer.Serve(listener)
 	if serveError != nil {
 		log.Fatalf("Could not serve listener")
 	}
-	proto.RegisterChatBoardServer(grpcServer, &ChatBoardServer{
-		clients: make(map[int32]proto.ChatBoard_JoinServer),
-	})
+	log.Print(" server is now listening")
 
-}
-
-func (c *Server) AskForTime(ctx context.Context, in *proto.AskForTimeMessage) (*proto.TimeMessage, error) {
-	log.Printf("Client with ID %d asked for the time\n", in.ClientId)
-	return &proto.TimeMessage{
-		Time:       time.Now().String(),
-		ServerName: c.name,
-	}, nil
 }
 
 type ChatBoardServer struct {
@@ -130,7 +125,6 @@ func (s *ChatBoardServer) Join(stream proto.ChatBoard_JoinServer) error {
 		// or you can broadcast the message to other clients
 		s.broadcast(fmt.Sprintf("Client %d says: %s", id, msg.GetMessage()), id)
 	}
-
 }
 
 // broadcast sends a message to all clients except the sender
