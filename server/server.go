@@ -86,11 +86,24 @@ func (s *ChatBoardServer) Join(stream proto.ChatBoard_JoinServer) error {
 	}
 	id := req.GetId() // get the client ID
 
+	// add a defer statement to handle stream errors
+	defer func() {
+		log.Printf("Client %d has left the chat board.", id)
+		// the client has closed the connection, remove it from the map
+		s.mu.Lock()
+		delete(s.clients, id)
+		s.mu.Unlock()
+
+		// broadcast a message to all other clients that the client has left
+		s.broadcast(fmt.Sprintf("Client %d has left the chat board.", id), id)
+		//}
+	}()
+
 	// add the client stream to the map
 	s.mu.Lock()
 	s.clients[id] = stream
 	s.mu.Unlock()
-
+	log.Printf("Client %d has joined the chat board.", id)
 	// send a welcome message to the new client
 	stream.Send(&proto.JoinResponse{
 		Message: fmt.Sprintf("Welcome, client %d!", id),
