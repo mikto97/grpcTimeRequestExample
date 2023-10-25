@@ -16,3 +16,16 @@ message TimeMessage {
 service TimeAsk {
   rpc AskForTime(AskForTimeMessage) returns (TimeMessage);
 }
+
+service ChatBoard {
+  rpc Join (stream JoinRequest) returns (stream JoinResponse) {}
+}
+
+message JoinRequest {
+  int32 id = 1; // the client ID
+  string message = 2; // the client msg
+}
+
+message JoinResponse {
+  string message = 1; // the message from the server
+}

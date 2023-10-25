@@ -4,12 +4,14 @@ import (
 	"bufio"
 	"context"
 	"flag"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	proto "grpc/grpc"
+	"io"
 	"log"
 	"os"
 	"strconv"
-	proto "grpc/grpc"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type Client struct {
@@ -20,7 +22,10 @@ type Client struct {
 var (
 	clientPort = flag.Int("cPort", 0, "client port number")
 	serverPort = flag.Int("sPort", 0, "server port number (should match the port used for the server)")
+	clientID   = flag.Int("cID", 0, "client ID")
 )
+
+var ()
 
 func main() {
 	// Parse the flags to get the port for the client
@@ -28,8 +33,14 @@ func main() {
 
 	// Create a client
 	client := &Client{
-		id:         1,
+		id:         *clientID,
 		portNumber: *clientPort,
+	}
+
+	// Join the chat board server
+	_, err := joinServer(int64(client.id))
+	if err != nil {
+		log.Fatalf("Could not join the chat board: %v", err)
 	}
 
 	// Wait for the client (user) to ask for the time
@@ -48,7 +59,13 @@ func waitForTimeRequest(client *Client) {
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		input := scanner.Text()
-		log.Printf("Client asked for time with input: %s\n", input)
+
+		if len(input) > 128 {
+			first128Chars := input[:128]
+			log.Printf("Client asked for time with input: %s\n", first128Chars)
+		} else {
+			log.Printf("Client asked for time with input: %s\n", input)
+		}
 
 		// Ask the server for the time
 		timeReturnMessage, err := serverConnection.AskForTime(context.Background(), &proto.AskForTimeMessage{
@@ -61,6 +78,60 @@ func waitForTimeRequest(client *Client) {
 			log.Printf("Server %s says the time is %s\n", timeReturnMessage.ServerName, timeReturnMessage.Time)
 		}
 	}
+}
+func getChatBoardClient() (proto.ChatBoardClient, error) {
+	// Dial the server at the specified port.
+	conn, err := grpc.Dial("localhost:"+strconv.Itoa(*serverPort), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("Could not connect to port %d", *serverPort)
+	} else {
+		log.Printf("Connected to the chat board at port %d\n", *serverPort)
+	}
+	return proto.NewChatBoardClient(conn), nil
+}
+
+func joinServer(id int64) (proto.ChatBoard_JoinClient, error) {
+	// Connect to the chat board
+	chatBoardClient, _ := getChatBoardClient()
+
+	// Create a bidirectional stream with the server
+	stream, err := chatBoardClient.Join(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	// Send the first message with the client ID
+	stream.Send(&proto.JoinRequest{
+		Id: int32(id),
+	})
+
+	// Receive messages from the server in a goroutine
+	go func() {
+		for {
+			res, err := stream.Recv()
+			if err == io.EOF {
+				log.Println("Server closed the connection")
+				return
+			}
+			if err != nil {
+				log.Println(err)
+				return
+			}
+			log.Println(res.GetMessage()) // print the message from the server
+		}
+	}()
+
+	// Send messages to the server in a loop
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		input := scanner.Text()
+		// create a message with the input and send it to the server
+		msg := &proto.JoinRequest{
+			Message: input,
+		}
+		stream.Send(msg)
+	}
+
+	return stream, nil
 }
 
 func connectToServer() (proto.TimeAskClient, error) {

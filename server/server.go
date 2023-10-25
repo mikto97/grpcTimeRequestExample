@@ -3,10 +3,13 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
+	proto "grpc/grpc"
+	"io"
 	"log"
 	"net"
 	"strconv"
-	proto "grpc/grpc"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -28,7 +31,7 @@ func main() {
 
 	// Create a server struct
 	server := &Server{
-		name: "serverName",
+		name: "smallPigsServer",
 		port: *port,
 	}
 
@@ -60,6 +63,10 @@ func startServer(server *Server) {
 	if serveError != nil {
 		log.Fatalf("Could not serve listener")
 	}
+	proto.RegisterChatBoardServer(grpcServer, &ChatBoardServer{
+		clients: make(map[int32]proto.ChatBoard_JoinServer),
+	})
+
 }
 
 func (c *Server) AskForTime(ctx context.Context, in *proto.AskForTimeMessage) (*proto.TimeMessage, error) {
@@ -68,4 +75,74 @@ func (c *Server) AskForTime(ctx context.Context, in *proto.AskForTimeMessage) (*
 		Time:       time.Now().String(),
 		ServerName: c.name,
 	}, nil
+}
+
+type ChatBoardServer struct {
+	proto.UnimplementedChatBoardServer
+	clients map[int32]proto.ChatBoard_JoinServer // a map of client IDs and streams
+	mu      sync.Mutex                           // a mutex for locking the map
+}
+
+func (s *ChatBoardServer) Join(stream proto.ChatBoard_JoinServer) error {
+	// receive the first message from the client, which contains its ID
+	req, err := stream.Recv()
+	if err != nil {
+		return err
+	}
+	id := req.GetId() // get the client ID
+
+	// add the client stream to the map
+	s.mu.Lock()
+	s.clients[id] = stream
+	s.mu.Unlock()
+
+	// send a welcome message to the new client
+	stream.Send(&proto.JoinResponse{
+		Message: fmt.Sprintf("Welcome, client %d!", id),
+	})
+
+	// broadcast a message to all other clients that a new client has joined
+	s.broadcast(fmt.Sprintf("Client %d has joined the chat board.", id), id)
+
+	// wait for any further messages from the client or stream errors
+	for {
+		msg, err := stream.Recv()
+		if err == io.EOF {
+			// the client has closed the connection, remove it from the map
+			s.mu.Lock()
+			delete(s.clients, id)
+			s.mu.Unlock()
+
+			// broadcast a message to all other clients that the client has left
+			s.broadcast(fmt.Sprintf("Client %d has left the chat board.", id), id)
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		// handle any other messages from the client here
+		// for example, you can print the message to the server log
+		log.Printf("Received message from client %d: %s\n", id, msg.GetMessage())
+		// or you can send a response back to the client
+		stream.Send(&proto.JoinResponse{
+			Message: fmt.Sprintf("Server received your message: %s", msg.GetMessage()),
+		})
+		// or you can broadcast the message to other clients
+		s.broadcast(fmt.Sprintf("Client %d says: %s", id, msg.GetMessage()), id)
+	}
+
+}
+
+// broadcast sends a message to all clients except the sender
+func (s *ChatBoardServer) broadcast(message string, sender int32) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, stream := range s.clients {
+		if id == sender {
+			continue // skip the sender
+		}
+		stream.Send(&proto.JoinResponse{
+			Message: message,
+		})
+	}
 }

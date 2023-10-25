@@ -19,7 +19,7 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	TimeAsk_AskForTime_FullMethodName = "/simpleGuide.TimeAsk/AskForTime"
+	TimeAsk_AskForTime_FullMethodName = "/grpc.TimeAsk/AskForTime"
 )
 
 // TimeAskClient is the client API for TimeAsk service.
@@ -96,7 +96,7 @@ func _TimeAsk_AskForTime_Handler(srv interface{}, ctx context.Context, dec func(
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var TimeAsk_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "simpleGuide.TimeAsk",
+	ServiceName: "grpc.TimeAsk",
 	HandlerType: (*TimeAskServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -105,5 +105,127 @@ var TimeAsk_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
+	Metadata: "grpc/proto.proto",
+}
+
+const (
+	ChatBoard_Join_FullMethodName = "/grpc.ChatBoard/Join"
+)
+
+// ChatBoardClient is the client API for ChatBoard service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type ChatBoardClient interface {
+	Join(ctx context.Context, opts ...grpc.CallOption) (ChatBoard_JoinClient, error)
+}
+
+type chatBoardClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewChatBoardClient(cc grpc.ClientConnInterface) ChatBoardClient {
+	return &chatBoardClient{cc}
+}
+
+func (c *chatBoardClient) Join(ctx context.Context, opts ...grpc.CallOption) (ChatBoard_JoinClient, error) {
+	stream, err := c.cc.NewStream(ctx, &ChatBoard_ServiceDesc.Streams[0], ChatBoard_Join_FullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &chatBoardJoinClient{stream}
+	return x, nil
+}
+
+type ChatBoard_JoinClient interface {
+	Send(*JoinRequest) error
+	Recv() (*JoinResponse, error)
+	grpc.ClientStream
+}
+
+type chatBoardJoinClient struct {
+	grpc.ClientStream
+}
+
+func (x *chatBoardJoinClient) Send(m *JoinRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *chatBoardJoinClient) Recv() (*JoinResponse, error) {
+	m := new(JoinResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// ChatBoardServer is the server API for ChatBoard service.
+// All implementations must embed UnimplementedChatBoardServer
+// for forward compatibility
+type ChatBoardServer interface {
+	Join(ChatBoard_JoinServer) error
+	mustEmbedUnimplementedChatBoardServer()
+}
+
+// UnimplementedChatBoardServer must be embedded to have forward compatible implementations.
+type UnimplementedChatBoardServer struct {
+}
+
+func (UnimplementedChatBoardServer) Join(ChatBoard_JoinServer) error {
+	return status.Errorf(codes.Unimplemented, "method Join not implemented")
+}
+func (UnimplementedChatBoardServer) mustEmbedUnimplementedChatBoardServer() {}
+
+// UnsafeChatBoardServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ChatBoardServer will
+// result in compilation errors.
+type UnsafeChatBoardServer interface {
+	mustEmbedUnimplementedChatBoardServer()
+}
+
+func RegisterChatBoardServer(s grpc.ServiceRegistrar, srv ChatBoardServer) {
+	s.RegisterService(&ChatBoard_ServiceDesc, srv)
+}
+
+func _ChatBoard_Join_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ChatBoardServer).Join(&chatBoardJoinServer{stream})
+}
+
+type ChatBoard_JoinServer interface {
+	Send(*JoinResponse) error
+	Recv() (*JoinRequest, error)
+	grpc.ServerStream
+}
+
+type chatBoardJoinServer struct {
+	grpc.ServerStream
+}
+
+func (x *chatBoardJoinServer) Send(m *JoinResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *chatBoardJoinServer) Recv() (*JoinRequest, error) {
+	m := new(JoinRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// ChatBoard_ServiceDesc is the grpc.ServiceDesc for ChatBoard service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var ChatBoard_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "grpc.ChatBoard",
+	HandlerType: (*ChatBoardServer)(nil),
+	Methods:     []grpc.MethodDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Join",
+			Handler:       _ChatBoard_Join_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "grpc/proto.proto",
 }
