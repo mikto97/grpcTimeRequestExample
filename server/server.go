@@ -59,7 +59,7 @@ func startServer(server *Server) {
 	if err != nil {
 		log.Fatalf("Could not create the server %v", err)
 	}
-	log.Printf("test - Started server at port: %d\n", server.port)
+	log.Printf("test - Started smallPigsServer at port: %d\n", server.port)
 
 	// Register the grpc server and serve its listener
 	//proto.RegisterTimeAskServer(grpcServer, chatBoardServer) needed to remove this for it to work
