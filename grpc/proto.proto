@@ -22,9 +22,10 @@ service ChatBoard {
 }
 
 message JoinRequest {
-  int32 id = 1; // the client ID
-  string message = 2; // the client msg
+  int32 id = 1; // The client ID
+  string message = 2; // The client message
 }
+
 
 message JoinResponse {
   string message = 1; // the message from the server

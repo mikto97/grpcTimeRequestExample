@@ -127,8 +127,8 @@ type JoinRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Id      int32  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`          // the client ID
-	Message string `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"` // the client msg
+	Id      int32  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`          // The client ID
+	Message string `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"` // The client message
 }
 
 func (x *JoinRequest) Reset() {

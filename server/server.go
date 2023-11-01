@@ -50,7 +50,8 @@ func startServer(server *Server) {
 
 	// Create a service implementation
 	chatBoardServer := &ChatBoardServer{
-		clients: make(map[int32]proto.ChatBoard_JoinServer),
+		clients:     make(map[int32]proto.ChatBoard_JoinServer),
+		lamportTime: 0,
 	}
 
 	//Make the server listen at the given port (convert int port to string)
@@ -74,8 +75,9 @@ func startServer(server *Server) {
 
 type ChatBoardServer struct {
 	proto.UnimplementedChatBoardServer
-	clients map[int32]proto.ChatBoard_JoinServer // a map of client IDs and streams
-	mu      sync.Mutex                           // a mutex for locking the map
+	clients     map[int32]proto.ChatBoard_JoinServer // a map of client IDs and streams
+	mu          sync.Mutex                           // a mutex for locking the map
+	lamportTime int
 }
 
 func (s *ChatBoardServer) Join(stream proto.ChatBoard_JoinServer) error {
@@ -86,33 +88,60 @@ func (s *ChatBoardServer) Join(stream proto.ChatBoard_JoinServer) error {
 	}
 	id := req.GetId() // get the client ID
 
+	// add the client stream to the map
+	s.mu.Lock()
+	s.clients[id] = stream
+	s.mu.Unlock()
+
+	s.mu.Lock()
+	s.lamportTime++
+	lamportTime := s.lamportTime
+	s.mu.Unlock()
+
 	// add a defer statement to handle stream errors
-	defer func() {
-		log.Printf("Client %d has left the chat board.", id)
+	/*defer func() {
+		log.Printf("Client %d has left the chat board. (Lamport timestamp: %d)", id, s.lamportTime+1)
+		lamportTime := s.lamportTime
+		lamportTime++
 		// the client has closed the connection, remove it from the map
 		s.mu.Lock()
 		delete(s.clients, id)
 		s.mu.Unlock()
 
 		// broadcast a message to all other clients that the client has left
-		s.broadcast(fmt.Sprintf("Client %d has left the chat board.", id), id)
+		s.broadcast(fmt.Sprintf("Client %d has left the chat board. (Lamport timestamp: %d)", id, s.lamportTime+1), id)
+
 		//}
 	}()
+	*/
 
-	// add the client stream to the map
-	s.mu.Lock()
-	s.clients[id] = stream
-	s.mu.Unlock()
-	log.Printf("Client %d has joined the chat board.", id)
+	log.Printf("Client %d has joined the chat board. (Lamport timestamp: %d)", id, lamportTime)
 	// send a welcome message to the new client
 	stream.Send(&proto.JoinResponse{
-		Message: fmt.Sprintf("Welcome, client %d!", id),
+		Message: fmt.Sprintf("Welcome, client %d! (Lamport timestamp: %d)", id, lamportTime),
 	})
 
 	// broadcast a message to all other clients that a new client has joined
-	s.broadcast(fmt.Sprintf("Client %d has joined the chat board.", id), id)
+	s.broadcast(fmt.Sprintf("Client %d has joined the chat board.(Lamport timestamp: %d)", id, lamportTime), id)
 
 	// wait for any further messages from the client or stream errors
+	defer func() {
+		s.mu.Lock()
+		s.lamportTime++
+		lamportTime := s.lamportTime
+		s.mu.Unlock()
+
+		log.Printf("Client %d has left the chat board. (Lamport timestamp: %d)", id, lamportTime)
+		// the client has closed the connection, remove it from the map
+		s.mu.Lock()
+		delete(s.clients, id)
+		s.mu.Unlock()
+
+		// broadcast a message to all other clients that the client has left
+		s.broadcast(fmt.Sprintf("Client %d has left the chat board. (Lamport timestamp: %d)", id, lamportTime), id)
+
+		//}
+	}()
 	for {
 		msg, err := stream.Recv()
 		if err == io.EOF {
@@ -122,21 +151,27 @@ func (s *ChatBoardServer) Join(stream proto.ChatBoard_JoinServer) error {
 			s.mu.Unlock()
 
 			// broadcast a message to all other clients that the client has left
-			s.broadcast(fmt.Sprintf("Client %d has left the chat board.", id), id)
+			s.broadcast(fmt.Sprintf("Client %d has left the chat board. (only happens if err == io.EOF) (Lamport timestamp: %d)", id, lamportTime), id)
 			return nil
 		}
 		if err != nil {
 			return err
 		}
+
+		s.mu.Lock()
+		s.lamportTime++
+		lamportTime := s.lamportTime
+		s.mu.Unlock()
+
 		// handle any other messages from the client here
 		// for example, you can print the message to the server log
-		log.Printf("Received message from client %d: %s\n", id, msg.GetMessage())
+		log.Printf("Received message from client %d: %s (Lamport timestamp: %d)\n", id, msg.GetMessage(), lamportTime)
 		// or you can send a response back to the client
 		stream.Send(&proto.JoinResponse{
-			Message: fmt.Sprintf("Server received your message: %s", msg.GetMessage()),
+			Message: fmt.Sprintf("Server received your message: %s (Lamport timestamp: %d)", msg.GetMessage(), lamportTime),
 		})
 		// or you can broadcast the message to other clients
-		s.broadcast(fmt.Sprintf("Client %d says: %s", id, msg.GetMessage()), id)
+		s.broadcast(fmt.Sprintf("Client %d says: %s (Lamport timestamp: %d)", id, msg.GetMessage(), lamportTime), id)
 	}
 }
 
