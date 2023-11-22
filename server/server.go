@@ -70,7 +70,7 @@ func (r *ReplicaManager) ReplicateBidRequest(ctx context.Context, req *proto.Bid
 	return response, nil
 }
 
-func (r *ReplicaManager) WaitForResponses(ctx context.Context, req *proto.Empty) (*proto.Responses, error) {
+func (r *ReplicaManager) WaitForResponses(ctx context.Context, req *proto.Empty) (*proto.RepeatedResponse, error) {
 	// Simulate waiting for responses from all replica managers
 	time.Sleep(2 * time.Second)
 
@@ -80,7 +80,11 @@ func (r *ReplicaManager) WaitForResponses(ctx context.Context, req *proto.Empty)
 		responses = append(responses, response)
 	}
 
-	return &proto.Responses{Responses: responses}, nil
+	return &proto.RepeatedResponse{
+		Responses: []*proto.Response{
+			// Populate responses as needed
+		},
+	}, nil
 }
 
 func (s *AuctionServer) Result(ctx context.Context, req *proto.ResultRequest) (*proto.ResultResponse, error) {
