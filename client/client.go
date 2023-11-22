@@ -1,114 +1,130 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"flag"
-	proto "grpc/grpc"
-	"io"
+	"fmt"
 	"log"
-	"os"
 	"strconv"
+	"time"
 
+	proto "grpc/grpc"
+
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
-type Client struct {
-	id         int
-	portNumber int
-}
-
-var (
-	clientPort = flag.Int("cPort", 0, "client port number")
-	serverPort = flag.Int("sPort", 0, "server port number (should match the port used for the server)")
-	clientID   = flag.Int("cID", 0, "client ID")
-)
-
-var ()
+var replicaManagerAddresses = []string{"localhost:50040", "localhost:50041", "localhost:50042"}
 
 func main() {
-	// Parse the flags to get the port for the client
+
 	flag.Parse()
 
-	// Create a client
-	client := &Client{
-		id:         *clientID,
-		portNumber: *clientPort,
-	}
-
-	// Join the chat board server
-	_, err := joinServer(int64(client.id))
+	BidderID := flag.Arg(0)
+	port, err := strconv.Atoi(flag.Arg(1))
 	if err != nil {
-		log.Fatalf("Could not join the chat board: %v", err)
+		log.Fatal("Invalid port number:", err)
 	}
 
-}
-
-func getChatBoardClient() (proto.ChatBoardClient, error) {
-	// Dial the server at the specified port.
-	conn, err := grpc.Dial("localhost:"+strconv.Itoa(*serverPort), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// Dial to the gRPC server
+	conn, err := grpc.Dial(fmt.Sprintf("localhost:50051"), grpc.WithInsecure())
 	if err != nil {
-		log.Fatalf("Could not connect to port %d", *serverPort)
-	} else {
-		log.Printf("Connected to the chat board at port %d\n", *serverPort)
+		log.Fatalf("could not connect: %v", err)
 	}
-	return proto.NewChatBoardClient(conn), nil
-}
+	defer conn.Close()
 
-func joinServer(id int64) (proto.ChatBoard_JoinClient, error) {
-	// Connect to the chat board
-	chatBoardClient, _ := getChatBoardClient()
+	// Create a client instance
+	client := proto.NewAuctionClient(conn)
 
-	// Create a bidirectional stream with the server
-	stream, err := chatBoardClient.Join(context.Background())
-	if err != nil {
-		return nil, err
-	}
+	fmt.Printf("%s connected at port: %d\n", BidderID, port)
 
-	// Send the first message with the client ID
-	stream.Send(&proto.JoinRequest{
-		Id: int32(id),
-	})
+	// Allow users to bid until the predefined time period ends
+	fmt.Printf("Auction is open. You can bid until %s.\n", time.Now().Add(100*time.Second).Format("15:04:05"))
 
-	// Receive messages from the server in a goroutine
-	go func() {
-		for {
-			res, err := stream.Recv()
-			if err == io.EOF {
-				log.Println("Server closed the connection")
-				return
-			}
-			if err != nil {
-				log.Println(err)
-				return
-			}
-			log.Println(res.GetMessage()) // print the message from the server
+	for {
+		// Generate a unique request identifier
+		requestID := generateUniqueRequestID()
+
+		// Get user input for the bid amount
+		var bidAmount int
+		fmt.Print("Enter your bid amount (0 to exit): ")
+		fmt.Scan(&bidAmount)
+
+		if bidAmount == 0 {
+			break
 		}
-	}()
 
-	// Send messages to the server in a loop
-	scanner := bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
-		input := scanner.Text()
-		// create a message with the input and send it to the server
-		msg := &proto.JoinRequest{
-			Message: input,
+		// Create a bid request with the unique identifier
+		bidRequest := &proto.BidRequest{
+			RequestId: requestID,
+			BidderId:  BidderID,
+			Amount:    int32(bidAmount),
 		}
-		stream.Send(msg)
+
+		// Multicast the bid request to all replica managers
+		sendBidRequestToReplicaManagers(client, bidRequest)
+
+		// Wait for responses from all replica managers
+		responses := waitForResponsesFromReplicaManagers(client)
+
+		// Process responses
+		processResponses(responses)
 	}
 
-	return stream, nil
-}
-
-/*func connectToServer() (proto.TimeAskClient, error) {
-	// Dial the server at the specified port.
-	conn, err := grpc.Dial("localhost:"+strconv.Itoa(*serverPort), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// Display the result at the end
+	resultRequest := &proto.ResultRequest{
+		RequestId: generateUniqueRequestID(),
+	}
+	resultResponse, err := client.Result(context.Background(), resultRequest)
 	if err != nil {
-		log.Fatalf("Could not connect to port %d", *serverPort)
-	} else {
-		log.Printf("Connected to the server at port %d\n", *serverPort)
+		log.Fatalf("Result failed: %v", err)
 	}
-	return proto.NewTimeAskClient(conn), nil
+	fmt.Println("Result Outcome:", resultResponse.Outcome)
 }
-*/
+
+func generateUniqueRequestID() string {
+	return uuid.New().String()
+}
+
+func sendBidRequestToReplicaManagers(client proto.AuctionClient, request *proto.BidRequest) {
+	// Iterate over replica managers and send bid request
+	for _, replicaManagerAddress := range replicaManagerAddresses {
+		conn, err := grpc.Dial(replicaManagerAddress, grpc.WithInsecure())
+		if err != nil {
+			log.Printf("Failed to connect to replica manager %s: %v", replicaManagerAddress, err)
+			continue
+		}
+		defer conn.Close()
+
+		// Create a client instance for the replica manager
+		client := proto.NewAuctionClient(conn)
+
+		// Send the bid request to the replica manager
+		_, err = client.ReplicateBidRequest(context.Background(), request)
+		if err != nil {
+			log.Printf("Failed to replicate bid to %s: %v", replicaManagerAddress, err)
+			// Handle error as needed
+		}
+	}
+}
+
+func waitForResponsesFromReplicaManagers(client proto.AuctionClient) []*proto.Response {
+	empty := &proto.Empty{}
+	response, err := client.WaitForResponsesFromReplicaManagers(context.Background(), empty)
+	if err != nil {
+		log.Printf("Failed to receive responses: %v", err)
+		// Handle error as needed
+		return nil
+	}
+	return response.Responses
+}
+func processResponses(responses []*proto.Response) {
+	for _, response := range responses {
+		// Process each response
+		if response.Success {
+			fmt.Printf("Replication succeeded for request ID %s\n", response.RequestId)
+		} else {
+			fmt.Printf("Replication failed for request ID %s. Error: %s\n", response.RequestId, response.Error)
+		}
+	}
+}

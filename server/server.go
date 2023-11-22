@@ -1,190 +1,130 @@
 package main
 
 import (
-	"flag"
+	"context"
 	"fmt"
-	proto "grpc/grpc"
-	"io"
 	"log"
 	"net"
-	"strconv"
 	"sync"
+	"time"
+
+	proto "grpc/grpc"
 
 	"google.golang.org/grpc"
 )
 
-// Struct that will be used to represent the Server.
-type Server struct {
-	proto.UnimplementedTimeAskServer // Necessary
-	proto.UnimplementedChatBoardServer
-	name string
-	port int
+type AuctionServer struct {
+	Bids       map[string]int32 // map[bidderID]bidAmount
+	Lock       sync.Mutex
+	AuctionEnd time.Time
+	proto.UnimplementedAuctionServer
 }
 
-// Used to get the user-defined port for the server from the command line
-var port = flag.Int("port", 0, "server port number")
+type ReplicaManager struct {
+	Responses map[string]*proto.Response // map[requestID]*Response
+	proto.UnimplementedAuctionServer
+}
+
+func NewAuctionServer() *AuctionServer {
+	return &AuctionServer{
+		Bids: make(map[string]int32),
+	}
+}
+func NewReplicaManager() *ReplicaManager {
+	return &ReplicaManager{
+		Responses: make(map[string]*proto.Response),
+	}
+}
+
+func (s *AuctionServer) Bid(ctx context.Context, req *proto.BidRequest) (*proto.BidResponse, error) {
+	s.Lock.Lock()
+	defer s.Lock.Unlock()
+
+	// Check if the auction has ended
+	if time.Now().After(s.AuctionEnd) {
+		return &proto.BidResponse{Outcome: "Auction has ended. Bids are no longer accepted."}, nil
+	}
+
+	// Update the bid if it's higher than the previous one
+	currentBid, ok := s.Bids[req.BidderId]
+	if !ok || req.Amount > currentBid {
+		s.Bids[req.BidderId] = req.Amount
+		return &proto.BidResponse{Outcome: "Bid accepted."}, nil
+	}
+
+	return &proto.BidResponse{Outcome: "Bid rejected. The bid amount must be higher than the current highest bid."}, nil
+}
+func (r *ReplicaManager) ReplicateBidRequest(ctx context.Context, req *proto.BidRequest) (*proto.Response, error) {
+	// Replica manager logic to handle replicated bid requests
+	// Implement coordination, execution, and response handling
+	response := &proto.Response{
+		RequestId: req.RequestId,
+		Success:   true, // Set based on the success of replication
+
+	}
+	// Simulate a delay to mimic the time taken for coordination and execution
+	time.Sleep(500 * time.Millisecond)
+
+	// Save the response for later retrieval by the main server
+	r.Responses[req.RequestId] = response
+	return response, nil
+}
+
+func (r *ReplicaManager) WaitForResponses(ctx context.Context, req *proto.Empty) (*proto.Responses, error) {
+	// Simulate waiting for responses from all replica managers
+	time.Sleep(2 * time.Second)
+
+	// Collect and return responses
+	responses := make([]*proto.Response, 0, len(r.Responses))
+	for _, response := range r.Responses {
+		responses = append(responses, response)
+	}
+
+	return &proto.Responses{Responses: responses}, nil
+}
+
+func (s *AuctionServer) Result(ctx context.Context, req *proto.ResultRequest) (*proto.ResultResponse, error) {
+	s.Lock.Lock()
+	defer s.Lock.Unlock()
+
+	// Check if the auction has ended
+	if time.Now().Before(s.AuctionEnd) {
+		fmt.Printf("Auction is still ongoing. Result not available yet.")
+		return &proto.ResultResponse{Outcome: "Auction is still ongoing. Result not available yet."}, nil
+	}
+
+	// Determine the winner
+	var winner string
+	var highestBid int32
+	for bidder, bid := range s.Bids {
+		if bid > highestBid {
+			highestBid = bid
+			winner = bidder
+		}
+	}
+	fmt.Printf("Winner: Bidder %s with amount %d", winner, highestBid)
+
+	return &proto.ResultResponse{Outcome: fmt.Sprintf("Winner: Bidder %s with amount %d", winner, highestBid)}, nil
+}
 
 func main() {
-	// Get the port from the command line when the server is run
-	flag.Parse()
-
-	// Create a server struct
-	server := &Server{
-		name: "smallPigsServer",
-		port: *port,
-	}
-
-	// Start the server
-	go startServer(server)
-
-	// Keep the server running until it is manually quit
-	for {
-
-	}
-}
-
-func startServer(server *Server) {
-
-	// Create a new grpc server
-	grpcServer := grpc.NewServer()
-
-	// Create a service implementation
-	chatBoardServer := &ChatBoardServer{
-		clients:     make(map[int32]proto.ChatBoard_JoinServer),
-		lamportTime: 0,
-	}
-
-	//Make the server listen at the given port (convert int port to string)
-	listener, err := net.Listen("tcp", ":"+strconv.Itoa(server.port))
-
+	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
-		log.Fatalf("Could not create the server %v", err)
+		log.Fatalf("failed to listen: %v", err)
 	}
-	log.Printf("test - Started smallPigsServer at port: %d\n", server.port)
+	//	replicaManager := &ReplicaManager{}
+	replicaManager := NewReplicaManager()
+	s := grpc.NewServer()
+	auctionServer := NewAuctionServer()
+	log.Printf("Server created. Listening on port %s", lis.Addr().String())
 
-	// Register the grpc server and serve its listener
-	//proto.RegisterTimeAskServer(grpcServer, chatBoardServer) needed to remove this for it to work
-	proto.RegisterChatBoardServer(grpcServer, chatBoardServer)
-	serveError := grpcServer.Serve(listener)
-	if serveError != nil {
-		log.Fatalf("Could not serve listener")
-	}
-	log.Print(" server is now listening")
+	// Set the auction end time (e.g., 100 seconds from now)
+	auctionServer.AuctionEnd = time.Now().Add(100 * time.Second)
 
-}
+	proto.RegisterAuctionServer(s, auctionServer)
+	proto.RegisterAuctionServer(s, replicaManager)
 
-type ChatBoardServer struct {
-	proto.UnimplementedChatBoardServer
-	clients     map[int32]proto.ChatBoard_JoinServer // a map of client IDs and streams
-	mu          sync.Mutex                           // a mutex for locking the map
-	lamportTime int
-}
-
-func (s *ChatBoardServer) Join(stream proto.ChatBoard_JoinServer) error {
-	// receive the first message from the client, which contains its ID
-	req, err := stream.Recv()
-	if err != nil {
-		return err
-	}
-	id := req.GetId() // get the client ID
-
-	// add the client stream to the map
-	s.mu.Lock()
-	s.clients[id] = stream
-	s.mu.Unlock()
-
-	s.mu.Lock()
-	s.lamportTime++
-	lamportTime := s.lamportTime
-	s.mu.Unlock()
-
-	// add a defer statement to handle stream errors
-	/*defer func() {
-		log.Printf("Client %d has left the chat board. (Lamport timestamp: %d)", id, s.lamportTime+1)
-		lamportTime := s.lamportTime
-		lamportTime++
-		// the client has closed the connection, remove it from the map
-		s.mu.Lock()
-		delete(s.clients, id)
-		s.mu.Unlock()
-
-		// broadcast a message to all other clients that the client has left
-		s.broadcast(fmt.Sprintf("Client %d has left the chat board. (Lamport timestamp: %d)", id, s.lamportTime+1), id)
-
-		//}
-	}()
-	*/
-
-	log.Printf("Client %d has joined the chat board. (Lamport timestamp: %d)", id, lamportTime)
-	// send a welcome message to the new client
-	stream.Send(&proto.JoinResponse{
-		Message: fmt.Sprintf("Welcome, client %d! (Lamport timestamp: %d)", id, lamportTime),
-	})
-
-	// broadcast a message to all other clients that a new client has joined
-	s.broadcast(fmt.Sprintf("Client %d has joined the chat board.(Lamport timestamp: %d)", id, lamportTime), id)
-
-	// wait for any further messages from the client or stream errors
-	defer func() {
-		s.mu.Lock()
-		s.lamportTime++
-		lamportTime := s.lamportTime
-		s.mu.Unlock()
-
-		log.Printf("Client %d has left the chat board. (Lamport timestamp: %d)", id, lamportTime)
-		// the client has closed the connection, remove it from the map
-		s.mu.Lock()
-		delete(s.clients, id)
-		s.mu.Unlock()
-
-		// broadcast a message to all other clients that the client has left
-		s.broadcast(fmt.Sprintf("Client %d has left the chat board. (Lamport timestamp: %d)", id, lamportTime), id)
-
-		//}
-	}()
-	for {
-		msg, err := stream.Recv()
-		if err == io.EOF {
-			// the client has closed the connection, remove it from the map
-			s.mu.Lock()
-			delete(s.clients, id)
-			s.mu.Unlock()
-
-			// broadcast a message to all other clients that the client has left
-			s.broadcast(fmt.Sprintf("Client %d has left the chat board. (only happens if err == io.EOF) (Lamport timestamp: %d)", id, lamportTime), id)
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-
-		s.mu.Lock()
-		s.lamportTime++
-		lamportTime := s.lamportTime
-		s.mu.Unlock()
-
-		// handle any other messages from the client here
-		// for example, you can print the message to the server log
-		log.Printf("Received message from client %d: %s (Lamport timestamp: %d)\n", id, msg.GetMessage(), lamportTime)
-		// or you can send a response back to the client
-		stream.Send(&proto.JoinResponse{
-			Message: fmt.Sprintf("Server received your message: %s (Lamport timestamp: %d)", msg.GetMessage(), lamportTime),
-		})
-		// or you can broadcast the message to other clients
-		s.broadcast(fmt.Sprintf("Client %d says: %s (Lamport timestamp: %d)", id, msg.GetMessage(), lamportTime), id)
-	}
-}
-
-// broadcast sends a message to all clients except the sender
-func (s *ChatBoardServer) broadcast(message string, sender int32) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for id, stream := range s.clients {
-		if id == sender {
-			continue // skip the sender
-		}
-		stream.Send(&proto.JoinResponse{
-			Message: message,
-		})
+	if err := s.Serve(lis); err != nil {
+		log.Fatalf("failed to serve: %v", err)
 	}
 }
