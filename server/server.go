@@ -49,6 +49,7 @@ func (s *AuctionServer) Bid(ctx context.Context, req *proto.BidRequest) (*proto.
 	currentBid, ok := s.Bids[req.BidderId]
 	if !ok || req.Amount > currentBid {
 		s.Bids[req.BidderId] = req.Amount
+		fmt.Printf("Bidder: %s has the highest bid with: %d at %s", req.BidderId, req.Amount, time.Now())
 		return &proto.BidResponse{Outcome: "Bid accepted."}, nil
 	}
 
@@ -56,7 +57,6 @@ func (s *AuctionServer) Bid(ctx context.Context, req *proto.BidRequest) (*proto.
 }
 func (r *ReplicaManager) ReplicateBidRequest(ctx context.Context, req *proto.BidRequest) (*proto.Response, error) {
 	// Replica manager logic to handle replicated bid requests
-	// Implement coordination, execution, and response handling
 	response := &proto.Response{
 		RequestId: req.RequestId,
 		Success:   true, // Set based on the success of replication
