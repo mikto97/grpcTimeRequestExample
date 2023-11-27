@@ -15,28 +15,8 @@ import (
 )
 
 func GetLeaderAddress() string {
-	allServerAddresses := []string{"localhost:50051", "localhost:50040"}
-
-	for _, address := range allServerAddresses {
-		conn, err := grpc.Dial(address, grpc.WithInsecure()) // Adjust for security as necessary
-		if err != nil {
-			log.Printf("Error connecting to server at %s: %v", address, err)
-			continue
-		}
-		defer conn.Close()
-
-		client := proto.NewAuctionClient(conn)
-		resp, err := client.IsLeader(context.Background(), &proto.LeaderCheckRequest{})
-		if err == nil && resp.IsLeader {
-			log.Printf("Current leader found at %s", address)
-			return address // This server is the current leader
-		}
-	}
-
-	log.Println("No leader found among the servers")
-	return "" // Returning empty string, but consider handling this case differently
+	return "localhost:50051"
 }
-
 func main() {
 	flag.Parse()
 
@@ -93,15 +73,8 @@ func main() {
 			time.Sleep(time.Second * 1) // Wait for 1 second before retrying
 			continue
 		}
-
-		// Wait for responses from all replica managers
-		fmt.Println("Waiting for responses from replica managers...")
-		responses := waitForResponsesFromReplicaManagers(client)
 		fmt.Printf("Received %d responses from replica managers.\n", len(responses))
 
-		// Process responses
-		fmt.Println("Processing responses...")
-		processResponses(responses)
 	}
 
 	// Display the result at the end
@@ -177,17 +150,6 @@ func GetReplicaManagerAddresses() []string {
 	// This could be from a configuration service, file, etc.
 	// For simplicity, returning a hardcoded list here
 	return []string{"localhost:50040"}
-}
-
-func waitForResponsesFromReplicaManagers(client proto.AuctionClient) []*proto.Response {
-	empty := &proto.Empty{}
-	response, err := client.WaitForResponsesFromReplicaManagers(context.Background(), empty)
-	if err != nil {
-		log.Printf("Failed to receive responses: %v", err)
-		// Handle error as needed
-		return nil
-	}
-	return response.Responses
 }
 
 func processResponses(responses []*proto.Response) {

@@ -19,14 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	Auction_Bid_FullMethodName                                 = "/grpc.Auction/Bid"
-	Auction_Result_FullMethodName                              = "/grpc.Auction/Result"
-	Auction_ReplicateBidRequest_FullMethodName                 = "/grpc.Auction/ReplicateBidRequest"
-	Auction_WaitForResponses_FullMethodName                    = "/grpc.Auction/WaitForResponses"
-	Auction_WaitForResponsesFromReplicaManagers_FullMethodName = "/grpc.Auction/WaitForResponsesFromReplicaManagers"
-	Auction_HandleLeadershipTransfer_FullMethodName            = "/grpc.Auction/HandleLeadershipTransfer"
-	Auction_CheckHealth_FullMethodName                         = "/grpc.Auction/CheckHealth"
-	Auction_IsLeader_FullMethodName                            = "/grpc.Auction/IsLeader"
+	Auction_Bid_FullMethodName                      = "/grpc.Auction/Bid"
+	Auction_Result_FullMethodName                   = "/grpc.Auction/Result"
+	Auction_HandleLeadershipTransfer_FullMethodName = "/grpc.Auction/HandleLeadershipTransfer"
 )
 
 // AuctionClient is the client API for Auction service.
@@ -35,12 +30,7 @@ const (
 type AuctionClient interface {
 	Bid(ctx context.Context, in *BidRequest, opts ...grpc.CallOption) (*BidResponse, error)
 	Result(ctx context.Context, in *ResultRequest, opts ...grpc.CallOption) (*ResultResponse, error)
-	ReplicateBidRequest(ctx context.Context, in *BidRequest, opts ...grpc.CallOption) (*Response, error)
-	WaitForResponses(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*RepeatedResponse, error)
-	WaitForResponsesFromReplicaManagers(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Responses, error)
 	HandleLeadershipTransfer(ctx context.Context, in *LeadershipTransferRequest, opts ...grpc.CallOption) (*LeadershipTransferResponse, error)
-	CheckHealth(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error)
-	IsLeader(ctx context.Context, in *LeaderCheckRequest, opts ...grpc.CallOption) (*LeaderCheckResponse, error)
 }
 
 type auctionClient struct {
@@ -69,54 +59,9 @@ func (c *auctionClient) Result(ctx context.Context, in *ResultRequest, opts ...g
 	return out, nil
 }
 
-func (c *auctionClient) ReplicateBidRequest(ctx context.Context, in *BidRequest, opts ...grpc.CallOption) (*Response, error) {
-	out := new(Response)
-	err := c.cc.Invoke(ctx, Auction_ReplicateBidRequest_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *auctionClient) WaitForResponses(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*RepeatedResponse, error) {
-	out := new(RepeatedResponse)
-	err := c.cc.Invoke(ctx, Auction_WaitForResponses_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *auctionClient) WaitForResponsesFromReplicaManagers(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Responses, error) {
-	out := new(Responses)
-	err := c.cc.Invoke(ctx, Auction_WaitForResponsesFromReplicaManagers_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *auctionClient) HandleLeadershipTransfer(ctx context.Context, in *LeadershipTransferRequest, opts ...grpc.CallOption) (*LeadershipTransferResponse, error) {
 	out := new(LeadershipTransferResponse)
 	err := c.cc.Invoke(ctx, Auction_HandleLeadershipTransfer_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *auctionClient) CheckHealth(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error) {
-	out := new(HealthCheckResponse)
-	err := c.cc.Invoke(ctx, Auction_CheckHealth_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *auctionClient) IsLeader(ctx context.Context, in *LeaderCheckRequest, opts ...grpc.CallOption) (*LeaderCheckResponse, error) {
-	out := new(LeaderCheckResponse)
-	err := c.cc.Invoke(ctx, Auction_IsLeader_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -129,12 +74,7 @@ func (c *auctionClient) IsLeader(ctx context.Context, in *LeaderCheckRequest, op
 type AuctionServer interface {
 	Bid(context.Context, *BidRequest) (*BidResponse, error)
 	Result(context.Context, *ResultRequest) (*ResultResponse, error)
-	ReplicateBidRequest(context.Context, *BidRequest) (*Response, error)
-	WaitForResponses(context.Context, *Empty) (*RepeatedResponse, error)
-	WaitForResponsesFromReplicaManagers(context.Context, *Empty) (*Responses, error)
 	HandleLeadershipTransfer(context.Context, *LeadershipTransferRequest) (*LeadershipTransferResponse, error)
-	CheckHealth(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error)
-	IsLeader(context.Context, *LeaderCheckRequest) (*LeaderCheckResponse, error)
 	mustEmbedUnimplementedAuctionServer()
 }
 
@@ -148,23 +88,8 @@ func (UnimplementedAuctionServer) Bid(context.Context, *BidRequest) (*BidRespons
 func (UnimplementedAuctionServer) Result(context.Context, *ResultRequest) (*ResultResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Result not implemented")
 }
-func (UnimplementedAuctionServer) ReplicateBidRequest(context.Context, *BidRequest) (*Response, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ReplicateBidRequest not implemented")
-}
-func (UnimplementedAuctionServer) WaitForResponses(context.Context, *Empty) (*RepeatedResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method WaitForResponses not implemented")
-}
-func (UnimplementedAuctionServer) WaitForResponsesFromReplicaManagers(context.Context, *Empty) (*Responses, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method WaitForResponsesFromReplicaManagers not implemented")
-}
 func (UnimplementedAuctionServer) HandleLeadershipTransfer(context.Context, *LeadershipTransferRequest) (*LeadershipTransferResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method HandleLeadershipTransfer not implemented")
-}
-func (UnimplementedAuctionServer) CheckHealth(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CheckHealth not implemented")
-}
-func (UnimplementedAuctionServer) IsLeader(context.Context, *LeaderCheckRequest) (*LeaderCheckResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method IsLeader not implemented")
 }
 func (UnimplementedAuctionServer) mustEmbedUnimplementedAuctionServer() {}
 
@@ -215,60 +140,6 @@ func _Auction_Result_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Auction_ReplicateBidRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(BidRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AuctionServer).ReplicateBidRequest(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Auction_ReplicateBidRequest_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuctionServer).ReplicateBidRequest(ctx, req.(*BidRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Auction_WaitForResponses_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Empty)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AuctionServer).WaitForResponses(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Auction_WaitForResponses_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuctionServer).WaitForResponses(ctx, req.(*Empty))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Auction_WaitForResponsesFromReplicaManagers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Empty)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AuctionServer).WaitForResponsesFromReplicaManagers(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Auction_WaitForResponsesFromReplicaManagers_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuctionServer).WaitForResponsesFromReplicaManagers(ctx, req.(*Empty))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _Auction_HandleLeadershipTransfer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(LeadershipTransferRequest)
 	if err := dec(in); err != nil {
@@ -283,42 +154,6 @@ func _Auction_HandleLeadershipTransfer_Handler(srv interface{}, ctx context.Cont
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AuctionServer).HandleLeadershipTransfer(ctx, req.(*LeadershipTransferRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Auction_CheckHealth_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(HealthCheckRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AuctionServer).CheckHealth(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Auction_CheckHealth_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuctionServer).CheckHealth(ctx, req.(*HealthCheckRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Auction_IsLeader_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(LeaderCheckRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AuctionServer).IsLeader(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Auction_IsLeader_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuctionServer).IsLeader(ctx, req.(*LeaderCheckRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -339,28 +174,8 @@ var Auction_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Auction_Result_Handler,
 		},
 		{
-			MethodName: "ReplicateBidRequest",
-			Handler:    _Auction_ReplicateBidRequest_Handler,
-		},
-		{
-			MethodName: "WaitForResponses",
-			Handler:    _Auction_WaitForResponses_Handler,
-		},
-		{
-			MethodName: "WaitForResponsesFromReplicaManagers",
-			Handler:    _Auction_WaitForResponsesFromReplicaManagers_Handler,
-		},
-		{
 			MethodName: "HandleLeadershipTransfer",
 			Handler:    _Auction_HandleLeadershipTransfer_Handler,
-		},
-		{
-			MethodName: "CheckHealth",
-			Handler:    _Auction_CheckHealth_Handler,
-		},
-		{
-			MethodName: "IsLeader",
-			Handler:    _Auction_IsLeader_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

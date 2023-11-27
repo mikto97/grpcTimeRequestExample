@@ -22,8 +22,6 @@ type AuctionServer struct {
 	Lock              sync.Mutex
 	AuctionEnd        time.Time
 	isCurrentlyLeader bool
-	LeaderLease       time.Time
-	LeaseDuration     time.Duration
 	proto.UnimplementedAuctionServer
 }
 
@@ -31,8 +29,7 @@ func NewAuctionServer(leaseDuration time.Duration) *AuctionServer {
 	return &AuctionServer{
 		Bids:              make(map[string]int32),
 		Responses:         make(map[string]*proto.Response),
-		isCurrentlyLeader: false,
-		LeaseDuration:     leaseDuration,
+		isCurrentlyLeader: true,
 	}
 }
 func (s *AuctionServer) CheckHealth(ctx context.Context, req *proto.HealthCheckRequest) (*proto.HealthCheckResponse, error) {
@@ -43,79 +40,6 @@ func (s *AuctionServer) CheckHealth(ctx context.Context, req *proto.HealthCheckR
 	return &proto.HealthCheckResponse{Healthy: true}, nil
 }
 
-func (s *AuctionServer) startLeaderElection() {
-	// Start a goroutine for leader election
-	go func() {
-		// Start sending heartbeats to check main server's availability
-		go s.sendHeartbeat()
-
-		for {
-			// Try to acquire the lease
-			if s.tryAcquireLease() {
-				s.isCurrentlyLeader = true
-				fmt.Println("I am the leader!")
-			} else {
-				s.isCurrentlyLeader = false
-			}
-
-			// Wait for a short duration before attempting to acquire the lease again
-			time.Sleep(s.LeaseDuration / 2)
-		}
-	}()
-}
-
-func (s *AuctionServer) IsLeader(ctx context.Context, req *proto.LeaderCheckRequest) (*proto.LeaderCheckResponse, error) {
-	return &proto.LeaderCheckResponse{IsLeader: s.isCurrentlyLeader}, nil
-}
-
-// sendHeartbeat sends periodic heartbeats to check main server's availability
-func (s *AuctionServer) sendHeartbeat() {
-	for {
-		// Implement logic to send a heartbeat to the main server
-		// For simplicity, let's use a sleep to simulate heartbeat
-		time.Sleep(s.LeaseDuration / 2)
-
-		// If the main server is not responding, initiate leader election
-		if !s.tryHeartbeat() {
-			s.tryAcquireLease()
-		}
-	}
-}
-
-func (s *AuctionServer) tryAcquireLease() bool {
-	// Simulate acquiring a lease by checking a shared resource (e.g., a file, database, or external service)
-	// In a real-world scenario, you would use a distributed coordination service like etcd or ZooKeeper for lease acquisition
-
-	// Check if the lease is currently held
-	leaseHeld := s.checkLease()
-
-	if !leaseHeld {
-		// Lease is not held, try to acquire it
-		if s.acquireLease() {
-			// Successfully acquired the lease
-			s.LeaderLease = time.Now().Add(s.LeaseDuration)
-			return true
-		} else {
-			// Acquiring lease failed, initiate leader election
-			s.startLeaderElection()
-		}
-	}
-
-	return false
-}
-
-func (s *AuctionServer) checkLease() bool {
-	// Simulate checking if the lease is currently held
-	return time.Now().Before(s.LeaderLease)
-}
-
-// Implement acquireLease to acquire the lease
-func (s *AuctionServer) acquireLease() bool {
-	// Simulate acquiring the lease by setting the lease expiration time
-	s.LeaderLease = time.Now().Add(s.LeaseDuration)
-	return true
-}
-
 func setupGracefulShutdown(mainServer *grpc.Server, auctionServer *AuctionServer) {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
@@ -123,17 +47,7 @@ func setupGracefulShutdown(mainServer *grpc.Server, auctionServer *AuctionServer
 	go func() {
 		<-c
 		fmt.Println("Server is shutting down...")
-
-		// Perform necessary cleanup tasks
-		// Notify replica managers about the shutdown
-		auctionServer.gracefulShutdown()
-
-		// Gracefully stop the gRPC server
-		mainServer.GracefulStop()
-
-		// Optionally, save current auction state to a file or database
-
-		os.Exit(0)
+		auctionServer.gracefulShutdown(mainServer)
 	}()
 }
 func (s *AuctionServer) Bid(ctx context.Context, req *proto.BidRequest) (*proto.BidResponse, error) {
@@ -179,54 +93,6 @@ func (s *AuctionServer) Result(ctx context.Context, req *proto.ResultRequest) (*
 
 var replicaManagerAddresses = []string{"localhost:50040"}
 
-func (s *AuctionServer) WaitForResponsesFromReplicaManagers(ctx context.Context, req *proto.Empty) (*proto.Responses, error) {
-	// Acquire lock to prevent data race with other methods
-	s.Lock.Lock()
-	defer s.Lock.Unlock()
-
-	fmt.Println("Waiting for responses in server.go from replica managers...")
-
-	// Use channels and goroutines to simulate waiting for responses
-	responseChannel := make(chan *proto.Response, len(replicaManagerAddresses))
-
-	for _, replicaManagerAddress := range replicaManagerAddresses {
-		go func(addr string) {
-			// Implement logic to wait for responses from replica managers
-			// This could involve waiting for a signal, checking a shared data structure, etc.
-			// For simplicity, I'll just return a placeholder response for now.
-			// Replace this with your actual implementation.
-			response := &proto.Response{
-				RequestId: generateUniqueRequestID(),
-				Success:   true, // Set based on the success of replication
-			}
-			responseChannel <- response
-		}(replicaManagerAddress)
-	}
-
-	// Collect responses from channels
-	responses := make([]*proto.Response, 0, len(replicaManagerAddresses))
-	for i := 0; i < len(replicaManagerAddresses); i++ {
-		select {
-		case response := <-responseChannel:
-			// Check if the replica manager is still active
-			if response != nil {
-				s.Responses[response.RequestId] = response
-				responses = append(responses, response)
-			} else {
-				// Handle the case where a replica manager has crashed
-				// You may want to initiate recovery mechanisms or elect a new leader
-				fmt.Println("Replica manager crashed!")
-			}
-		case <-time.After(2 * time.Second):
-			// Handle the case where a replica manager does not respond within a timeout
-			// You may want to initiate recovery mechanisms or elect a new leader
-			fmt.Println("Replica manager timeout!")
-		}
-	}
-	return &proto.Responses{Responses: responses}, nil
-
-}
-
 func (s *AuctionServer) tryHeartbeat() bool {
 	// Simulate checking if the main server is still alive
 	// For simplicity, let's assume it always succeeds
@@ -236,28 +102,31 @@ func (s *AuctionServer) tryHeartbeat() bool {
 func generateUniqueRequestID() string {
 	return uuid.New().String()
 }
-func (s *AuctionServer) gracefulShutdown() {
-	// Notify replica managers about the shutdown and transfer leadership
-	s.notifyReplicaManagers()
+func (s *AuctionServer) gracefulShutdown(mainServer *grpc.Server) {
+	fmt.Println("Notifying replica manager and transferring leadership...")
+	s.notifyReplicaManager("localhost:50040")
 
-	// Additional shutdown logic...
+	fmt.Println("Performing additional shutdown tasks...")
+	// Here you can add any additional cleanup logic needed before shutting down the server
+
+	fmt.Println("Shutting down the gRPC server gracefully...")
+	mainServer.GracefulStop()
 }
 
-func (s *AuctionServer) notifyReplicaManagers() {
-	// Assuming a slice of addresses for the replica managers
-	for _, address := range replicaManagerAddresses {
-		conn, err := grpc.Dial(address, grpc.WithInsecure()) // Adjust as necessary for security
-		if err != nil {
-			log.Printf("Failed to dial replica manager at %s: %v", address, err)
-			continue
-		}
-		defer conn.Close()
+func (s *AuctionServer) notifyReplicaManager(address string) {
+	conn, err := grpc.Dial(address, grpc.WithInsecure()) // Adjust as necessary for security
+	if err != nil {
+		log.Printf("Failed to dial replica manager at %s: %v", address, err)
+		return
+	}
+	defer conn.Close()
 
-		client := proto.NewAuctionClient(conn)
-		_, err = client.HandleLeadershipTransfer(context.Background(), &proto.LeadershipTransferRequest{})
-		if err != nil {
-			log.Printf("Failed to transfer leadership to replica manager at %s: %v", address, err)
-		}
+	client := proto.NewAuctionClient(conn)
+	_, err = client.HandleLeadershipTransfer(context.Background(), &proto.LeadershipTransferRequest{})
+	if err != nil {
+		log.Printf("Failed to transfer leadership to replica manager at %s: %v", address, err)
+	} else {
+		fmt.Printf("Leadership successfully transferred to replica manager at %s\n", address)
 	}
 }
 
@@ -268,7 +137,6 @@ func main() {
 	}
 	mainServer := grpc.NewServer()
 	auctionServer := NewAuctionServer(10 * time.Second)
-	auctionServer.startLeaderElection()
 
 	proto.RegisterAuctionServer(mainServer, auctionServer)
 

@@ -7,12 +7,8 @@ option go_package = "homework5/grpc";
 service Auction {
   rpc Bid (BidRequest) returns (BidResponse);
   rpc Result (ResultRequest) returns (ResultResponse);
-  rpc ReplicateBidRequest(BidRequest) returns (Response);
-  rpc WaitForResponses(Empty) returns (RepeatedResponse);
-  rpc WaitForResponsesFromReplicaManagers(Empty) returns (Responses);
   rpc HandleLeadershipTransfer(LeadershipTransferRequest) returns (LeadershipTransferResponse);
-  rpc CheckHealth(HealthCheckRequest) returns (HealthCheckResponse);
-  rpc IsLeader(LeaderCheckRequest) returns (LeaderCheckResponse);
+
 }
 
 message LeaderCheckRequest {
