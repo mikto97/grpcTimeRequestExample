@@ -10,6 +10,25 @@ service Auction {
   rpc ReplicateBidRequest(BidRequest) returns (Response);
   rpc WaitForResponses(Empty) returns (RepeatedResponse);
   rpc WaitForResponsesFromReplicaManagers(Empty) returns (Responses);
+  rpc HandleLeadershipTransfer(LeadershipTransferRequest) returns (LeadershipTransferResponse);
+  rpc CheckHealth(HealthCheckRequest) returns (HealthCheckResponse);
+  rpc IsLeader(LeaderCheckRequest) returns (LeaderCheckResponse);
+}
+
+message LeaderCheckRequest {
+    // Add fields if needed
+}
+
+message LeaderCheckResponse {
+    bool isLeader = 1;
+}
+// Health check request message
+message HealthCheckRequest {
+}
+
+// Health check response message
+message HealthCheckResponse {
+    bool healthy = 1;
 }
 
 message BidRequest {
@@ -23,17 +42,21 @@ message BidResponse {
 }
 
 message Response {
-  // New message for response handling
   string request_id = 1;
   string error = 2;
   bool success = 3;
-  // Add other fields as needed for your protocol
+  string message = 4;
 }
 
 message Responses {
   repeated Response responses = 1;
 }
 
+message LeadershipTransferRequest {
+}
+message LeadershipTransferResponse {
+    bool success = 1;
+}
 
 message ResultRequest {
   string request_id = 1;
