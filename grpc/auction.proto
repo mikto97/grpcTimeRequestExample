@@ -12,6 +12,9 @@ service Auction {
 
 
 }
+message LeadershipTransferRequest {
+    int64 auction_end_time = 1; // Timestamp of auction end time
+}
 
 message LeaderCheckRequest {
     // Add fields if needed
@@ -50,8 +53,6 @@ message Responses {
   repeated Response responses = 1;
 }
 
-message LeadershipTransferRequest {
-}
 message LeadershipTransferResponse {
     bool success = 1;
 }

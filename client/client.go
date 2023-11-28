@@ -28,6 +28,15 @@ func getServerAddress() string {
 	// If main server is down, return the replica manager's address
 	return replicaManager
 }
+func queryAuctionState(client proto.AuctionClient) {
+	resultRequest := &proto.ResultRequest{RequestId: generateUniqueRequestID()}
+	resultResponse, err := client.Result(context.Background(), resultRequest)
+	if err != nil {
+		fmt.Println("Error querying auction state:", err)
+		return
+	}
+	fmt.Println("Current Auction State:", resultResponse.Outcome)
+}
 
 func main() {
 	flag.Parse()
@@ -55,6 +64,7 @@ func main() {
 	fmt.Printf("Auction is open. You can bid until %s.\n", time.Now().Add(30*time.Second).Format("15:04:05"))
 
 	for {
+		queryAuctionState(client)
 		requestID := generateUniqueRequestID()
 
 		var bidAmount int
@@ -71,15 +81,18 @@ func main() {
 			Amount:    int32(bidAmount),
 		}
 
-		// Send the bid to the main server
-		_, err = client.Bid(context.Background(), bidRequest)
+		// Send the bid to the server and handle the response
+		bidResponse, err := client.Bid(context.Background(), bidRequest)
 		if err != nil {
-			fmt.Println("Error sending bid to main server:", err)
+			fmt.Println("Error sending bid:", err)
 			// Optionally handle the error, e.g., retrying
+		} else {
+			fmt.Printf("Server Response: %s\n", bidResponse.Outcome)
 		}
 
 		// Replicate the bid to the replica manager
 		sendAndReplicateBid(bidRequest)
+		fmt.Println("Bid is submitted")
 
 	}
 
@@ -107,6 +120,7 @@ func sendAndReplicateBid(bidRequest *proto.BidRequest) {
 	} else {
 		// If bid to the main server was successful, replicate it to the replica manager
 		sendBidToServer(replicaManagerAddress, bidRequest, true)
+
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	proto "grpc/grpc"
 
@@ -18,7 +19,8 @@ type ReplicaManager struct {
 	Responses         map[string]*proto.Response // map[requestID]*Response
 	CurrentBids       map[string]int32           // map[bidderID]bidAmount
 	isCurrentlyLeader bool                       // Simplified leadership logic
-	Mutex             sync.Mutex                 // Mutex to protect shared resources
+	AuctionEnd        time.Time
+	Mutex             sync.Mutex // Mutex to protect shared resources
 	proto.UnimplementedAuctionServer
 }
 
@@ -58,6 +60,67 @@ func (r *ReplicaManager) ReplicateBidRequest(ctx context.Context, req *proto.Bid
 	// Save the response for later retrieval
 	r.Responses[req.RequestId] = response
 	return response, nil
+}
+
+func (r *ReplicaManager) Bid(ctx context.Context, req *proto.BidRequest) (*proto.BidResponse, error) {
+	r.Mutex.Lock()
+	defer r.Mutex.Unlock()
+
+	if time.Now().After(r.AuctionEnd) {
+		fmt.Println("Bid rejected: Auction has ended.")
+		return &proto.BidResponse{Outcome: "Auction has ended. Bids are no longer accepted."}, nil
+	}
+
+	currentHighestBid, exists := r.CurrentBids[req.BidderId]
+	if !exists {
+		fmt.Printf("New bidder registered: %s\n", req.BidderId)
+	}
+	if !exists || req.Amount > currentHighestBid {
+		r.CurrentBids[req.BidderId] = req.Amount
+		fmt.Printf("Bid accepted from %s: %d\n", req.BidderId, req.Amount)
+		return &proto.BidResponse{Outcome: "Bid accepted."}, nil
+	}
+
+	fmt.Println("Bid rejected: Bid too low.")
+	return &proto.BidResponse{Outcome: "Bid too low. Please place a higher bid."}, nil
+}
+
+func (r *ReplicaManager) Result(ctx context.Context, req *proto.ResultRequest) (*proto.ResultResponse, error) {
+	r.Mutex.Lock()
+	defer r.Mutex.Unlock()
+
+	// Check if the auction has ended
+	if time.Now().After(r.AuctionEnd) {
+		// Auction has ended, find the highest bid
+		var winningBid int32
+		var winner string
+		for bidderId, bidAmount := range r.CurrentBids {
+			if bidAmount > winningBid {
+				winningBid = bidAmount
+				winner = bidderId
+			}
+		}
+
+		// Return the result with the winner's information
+		if winner != "" {
+			return &proto.ResultResponse{Outcome: fmt.Sprintf("Auction ended. Winner: %s with bid: %d", winner, winningBid)}, nil
+		} else {
+			return &proto.ResultResponse{Outcome: "Auction ended with no bids."}, nil
+		}
+	}
+
+	// Auction is still ongoing, return a message indicating this
+	return &proto.ResultResponse{Outcome: "Auction is still ongoing. Result not available yet."}, nil
+}
+
+func (r *ReplicaManager) HandleLeadershipTransfer(ctx context.Context, req *proto.LeadershipTransferRequest) (*proto.LeadershipTransferResponse, error) {
+	r.Mutex.Lock()
+	defer r.Mutex.Unlock()
+
+	r.isCurrentlyLeader = true
+	r.AuctionEnd = time.Unix(req.AuctionEndTime, 0) // Set auction end time
+	fmt.Println("Leadership transferred to this Replica Manager with Auction End Time:", r.AuctionEnd)
+	return &proto.LeadershipTransferResponse{}, nil
 }
 
 func (r *ReplicaManager) CheckHealth(ctx context.Context, req *proto.HealthCheckRequest) (*proto.HealthCheckResponse, error) {

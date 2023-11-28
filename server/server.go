@@ -54,18 +54,22 @@ func (s *AuctionServer) Bid(ctx context.Context, req *proto.BidRequest) (*proto.
 	s.Lock.Lock()
 	defer s.Lock.Unlock()
 
-	// Check if the auction has ended
 	if time.Now().After(s.AuctionEnd) {
+		fmt.Println("Bid rejected: Auction has ended.")
 		return &proto.BidResponse{Outcome: "Auction has ended. Bids are no longer accepted."}, nil
 	}
 
-	// Validate the bid amount
 	currentHighestBid, exists := s.Bids[req.BidderId]
+	if !exists {
+		fmt.Printf("New bidder registered: %s\n", req.BidderId)
+	}
 	if !exists || req.Amount > currentHighestBid {
 		s.Bids[req.BidderId] = req.Amount
+		fmt.Printf("Bid accepted from %s: %d\n", req.BidderId, req.Amount)
 		return &proto.BidResponse{Outcome: "Bid accepted."}, nil
 	}
 
+	fmt.Println("Bid rejected: Bid too low.")
 	return &proto.BidResponse{Outcome: "Bid too low. Please place a higher bid."}, nil
 }
 
@@ -122,7 +126,9 @@ func (s *AuctionServer) notifyReplicaManager(address string) {
 	defer conn.Close()
 
 	client := proto.NewAuctionClient(conn)
-	_, err = client.HandleLeadershipTransfer(context.Background(), &proto.LeadershipTransferRequest{})
+	_, err = client.HandleLeadershipTransfer(context.Background(), &proto.LeadershipTransferRequest{
+		AuctionEndTime: s.AuctionEnd.Unix(),
+	})
 	if err != nil {
 		log.Printf("Failed to transfer leadership to replica manager at %s: %v", address, err)
 	} else {
