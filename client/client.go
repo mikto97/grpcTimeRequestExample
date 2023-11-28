@@ -14,42 +14,49 @@ import (
 	"google.golang.org/grpc"
 )
 
-func GetLeaderAddress() string {
-	return "localhost:50051"
+func getServerAddress() string {
+	mainServer := "localhost:50051"
+	replicaManager := "localhost:50040"
+
+	// Try to connect to the main server
+	conn, err := grpc.Dial(mainServer, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(5*time.Second))
+	if err == nil {
+		conn.Close() // Close the connection if successful
+		return mainServer
+	}
+
+	// If main server is down, return the replica manager's address
+	return replicaManager
 }
+
 func main() {
 	flag.Parse()
-
 	BidderID := flag.Arg(0)
 	port, err := strconv.Atoi(flag.Arg(1))
 	if err != nil {
 		log.Fatal("Invalid port number:", err)
 	}
 
-	leaderAddress := GetLeaderAddress()
+	leaderAddress := getServerAddress()
 	if leaderAddress == "" {
 		log.Fatal("No leader address available, exiting")
 	}
-	// Dial to the gRPC server
+
 	conn, err := grpc.Dial(leaderAddress, grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("could not connect: %v", err)
 	}
 	defer conn.Close()
 
-	// Create a client instance
 	client := proto.NewAuctionClient(conn)
 
 	fmt.Printf("%s connected at port: %d\n", BidderID, port)
 
-	// Allow users to bid until the predefined time period ends
 	fmt.Printf("Auction is open. You can bid until %s.\n", time.Now().Add(30*time.Second).Format("15:04:05"))
 
 	for {
-		// Generate a unique request identifier
 		requestID := generateUniqueRequestID()
 
-		// Get user input for the bid amount
 		var bidAmount int
 		fmt.Print("Enter your bid amount (0 to exit): ")
 		fmt.Scan(&bidAmount)
@@ -58,29 +65,25 @@ func main() {
 			break
 		}
 
-		// Create a bid request with the unique identifier
 		bidRequest := &proto.BidRequest{
 			RequestId: requestID,
 			BidderId:  BidderID,
 			Amount:    int32(bidAmount),
 		}
 
-		// Multicast the bid request to all replica managers
-		fmt.Println("Multicasting bid request to replica managers...")
-		sendBidRequestToReplicaManagers(client, bidRequest)
+		// Send the bid to the main server
+		_, err = client.Bid(context.Background(), bidRequest)
 		if err != nil {
-			fmt.Println("Error sending bid request, retrying...")
-			time.Sleep(time.Second * 1) // Wait for 1 second before retrying
-			continue
+			fmt.Println("Error sending bid to main server:", err)
+			// Optionally handle the error, e.g., retrying
 		}
-		fmt.Printf("Received %d responses from replica managers.\n", len(responses))
+
+		// Replicate the bid to the replica manager
+		sendAndReplicateBid(bidRequest)
 
 	}
 
-	// Display the result at the end
-	resultRequest := &proto.ResultRequest{
-		RequestId: generateUniqueRequestID(),
-	}
+	resultRequest := &proto.ResultRequest{RequestId: generateUniqueRequestID()}
 	resultResponse, err := client.Result(context.Background(), resultRequest)
 	if err != nil {
 		log.Fatalf("Result failed: %v", err)
@@ -92,72 +95,44 @@ func generateUniqueRequestID() string {
 	return uuid.New().String()
 }
 
-func sendBidRequestToReplicaManagers(client proto.AuctionClient, request *proto.BidRequest) error {
-	var lastErr error
+func sendAndReplicateBid(bidRequest *proto.BidRequest) {
+	mainServerAddress := "localhost:50051"
+	replicaManagerAddress := "localhost:50040"
 
-	for retry := 0; retry < 3; retry++ { // Retry the whole process up to 3 times
-		// Get the latest list of replica manager addresses
-		replicaManagerAddresses := GetReplicaManagerAddresses()
-
-		for _, replicaManagerAddress := range replicaManagerAddresses {
-			success := false
-
-			for attempt := 0; attempt < 3; attempt++ { // Retry connecting to each replica manager up to 3 times
-				conn, err := grpc.Dial(replicaManagerAddress, grpc.WithInsecure())
-				if err != nil {
-					log.Printf("Attempt %d: failed to connect to replica manager %s: %v", attempt+1, replicaManagerAddress, err)
-					lastErr = err
-					time.Sleep(time.Second) // Wait for 1 second before retrying
-					continue
-				}
-
-				replicaManagerClient := proto.NewAuctionClient(conn)
-
-				_, err = replicaManagerClient.ReplicateBidRequest(context.Background(), request)
-				conn.Close() // Close the connection whether it succeeds or fails
-
-				if err != nil {
-					log.Printf("Attempt %d: failed to replicate bid to %s: %v", attempt+1, replicaManagerAddress, err)
-					lastErr = err
-					time.Sleep(time.Second) // Wait for 1 second before retrying
-				} else {
-					fmt.Printf("Successfully replicated bid to %s.\n", replicaManagerAddress)
-					success = true
-					break // Break out of the retry loop on success
-				}
-			}
-
-			if !success {
-				log.Printf("Failed to replicate bid to replica manager %s after multiple attempts", replicaManagerAddress)
-				// Optionally, you can choose to continue to the next replica manager or return an error
-			}
-		}
-
-		if lastErr == nil {
-			return nil // Successfully sent request to at least one replica manager
-		}
-
-		// If all attempts failed, wait for a moment before retrying the whole process
-		log.Printf("Retrying the entire replication process...")
-		time.Sleep(3 * time.Second)
+	// Try sending the bid to the main server
+	if err := sendBidToServer(mainServerAddress, bidRequest, false); err != nil {
+		fmt.Println("Error sending bid to main server, switching to replica manager...")
+		// Switch to the replica manager if the main server is down
+		sendBidToServer(replicaManagerAddress, bidRequest, true)
+	} else {
+		// If bid to the main server was successful, replicate it to the replica manager
+		sendBidToServer(replicaManagerAddress, bidRequest, true)
 	}
-
-	return fmt.Errorf("failed to replicate bid to any replica managers after multiple retries: %v", lastErr)
 }
 
-func GetReplicaManagerAddresses() []string {
-	// Logic to retrieve the latest list of replica manager addresses
-	// This could be from a configuration service, file, etc.
-	// For simplicity, returning a hardcoded list here
-	return []string{"localhost:50040"}
-}
-
-func processResponses(responses []*proto.Response) {
-	for _, response := range responses {
-		if response.Success {
-			fmt.Printf("Response from %s: %s\n", response.RequestId, response.Message)
-		} else {
-			fmt.Printf("Replication failed: %s\n", response.Error)
-		}
+func sendBidToServer(serverAddress string, bidRequest *proto.BidRequest, isReplica bool) error {
+	conn, err := grpc.Dial(serverAddress, grpc.WithInsecure())
+	if err != nil {
+		log.Printf("Failed to connect to server at %s: %v", serverAddress, err)
+		return err
 	}
+	defer conn.Close()
+
+	client := proto.NewAuctionClient(conn)
+
+	if isReplica {
+		// Call ReplicateBidRequest for the replica manager
+		_, err = client.ReplicateBidRequest(context.Background(), bidRequest)
+	} else {
+		// Call Bid for the main server
+		_, err = client.Bid(context.Background(), bidRequest)
+	}
+
+	if err != nil {
+		log.Printf("Failed to send bid to server at %s: %v", serverAddress, err)
+		return err
+	} else {
+		fmt.Printf("Bid successfully sent to server at %s.\n", serverAddress)
+	}
+	return nil
 }

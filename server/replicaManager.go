@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -38,10 +39,12 @@ func (r *ReplicaManager) ReplicateBidRequest(ctx context.Context, req *proto.Bid
 	highestBid := r.CurrentBids[req.BidderId]
 	message := "Bid accepted as the highest bid"
 	success := true
+	fmt.Println("Bid accepted as the highest bid")
 
 	if req.Amount <= highestBid {
 		message = "Bid too low. Current highest bid is: " + strconv.Itoa(int(highestBid))
 		success = false
+		fmt.Println("Bid too low. Current highest bid is: " + strconv.Itoa(int(highestBid)))
 	} else {
 		r.CurrentBids[req.BidderId] = req.Amount
 	}

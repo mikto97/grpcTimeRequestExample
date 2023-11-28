@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion7
 
 const (
 	Auction_Bid_FullMethodName                      = "/grpc.Auction/Bid"
+	Auction_ReplicateBidRequest_FullMethodName      = "/grpc.Auction/ReplicateBidRequest"
 	Auction_Result_FullMethodName                   = "/grpc.Auction/Result"
 	Auction_HandleLeadershipTransfer_FullMethodName = "/grpc.Auction/HandleLeadershipTransfer"
 )
@@ -29,6 +30,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AuctionClient interface {
 	Bid(ctx context.Context, in *BidRequest, opts ...grpc.CallOption) (*BidResponse, error)
+	ReplicateBidRequest(ctx context.Context, in *BidRequest, opts ...grpc.CallOption) (*Response, error)
 	Result(ctx context.Context, in *ResultRequest, opts ...grpc.CallOption) (*ResultResponse, error)
 	HandleLeadershipTransfer(ctx context.Context, in *LeadershipTransferRequest, opts ...grpc.CallOption) (*LeadershipTransferResponse, error)
 }
@@ -44,6 +46,15 @@ func NewAuctionClient(cc grpc.ClientConnInterface) AuctionClient {
 func (c *auctionClient) Bid(ctx context.Context, in *BidRequest, opts ...grpc.CallOption) (*BidResponse, error) {
 	out := new(BidResponse)
 	err := c.cc.Invoke(ctx, Auction_Bid_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *auctionClient) ReplicateBidRequest(ctx context.Context, in *BidRequest, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := c.cc.Invoke(ctx, Auction_ReplicateBidRequest_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -73,6 +84,7 @@ func (c *auctionClient) HandleLeadershipTransfer(ctx context.Context, in *Leader
 // for forward compatibility
 type AuctionServer interface {
 	Bid(context.Context, *BidRequest) (*BidResponse, error)
+	ReplicateBidRequest(context.Context, *BidRequest) (*Response, error)
 	Result(context.Context, *ResultRequest) (*ResultResponse, error)
 	HandleLeadershipTransfer(context.Context, *LeadershipTransferRequest) (*LeadershipTransferResponse, error)
 	mustEmbedUnimplementedAuctionServer()
@@ -84,6 +96,9 @@ type UnimplementedAuctionServer struct {
 
 func (UnimplementedAuctionServer) Bid(context.Context, *BidRequest) (*BidResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Bid not implemented")
+}
+func (UnimplementedAuctionServer) ReplicateBidRequest(context.Context, *BidRequest) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReplicateBidRequest not implemented")
 }
 func (UnimplementedAuctionServer) Result(context.Context, *ResultRequest) (*ResultResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Result not implemented")
@@ -118,6 +133,24 @@ func _Auction_Bid_Handler(srv interface{}, ctx context.Context, dec func(interfa
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AuctionServer).Bid(ctx, req.(*BidRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Auction_ReplicateBidRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BidRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuctionServer).ReplicateBidRequest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Auction_ReplicateBidRequest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuctionServer).ReplicateBidRequest(ctx, req.(*BidRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -168,6 +201,10 @@ var Auction_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Bid",
 			Handler:    _Auction_Bid_Handler,
+		},
+		{
+			MethodName: "ReplicateBidRequest",
+			Handler:    _Auction_ReplicateBidRequest_Handler,
 		},
 		{
 			MethodName: "Result",
